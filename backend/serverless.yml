@@ -13,7 +13,7 @@ provider:
     JWT_SECRET: ${env:JWT_SECRET, 'default_secret'}
     JWT_REFRESH_SECRET: ${env:JWT_REFRESH_SECRET, 'default_refresh_secret'}
     CONNECTIONS_TABLE: "${self:service}-${self:provider.stage}-WebSocketConnections"
-    WEBSOCKET_ENDPOINT: "wss://gt2ls5ue6i.execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}"
+    WEBSOCKET_ENDPOINT: "https://gt2ls5ue6i.execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}"
 
   # Permisos IAM para Lambda
   iam:
@@ -114,6 +114,20 @@ functions:
     events:
       - websocket:
           route: $connect
+  
+  # Lambda para manejar la desconexión WebSocket
+  disconnect:
+    handler: dist/websocket/disconnectHandler.disconnectHandler
+    events:
+      - websocket:
+          route: $disconnect
+
+  # Lambda para manejar el envío de tokens
+  refresh:
+    handler: src/websocket/refreshHandler.refreshHandler
+    events:
+      - websocket:
+          route: refresh
 
 resources:
   Resources:
