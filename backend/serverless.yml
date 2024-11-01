@@ -1,0 +1,147 @@
+service: auth-backend
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  stage: ${opt:stage, 'dev'}  # Permite definir la etapa en tiempo de despliegue
+  region: us-east-1
+  profile: default
+
+  environment:
+    JWT_SECRET: ${env:JWT_SECRET, 'default_secret'}
+    JWT_REFRESH_SECRET: ${env:JWT_REFRESH_SECRET, 'default_refresh_secret'}
+    CONNECTIONS_TABLE: "${self:service}-${self:provider.stage}-WebSocketConnections"
+    WEBSOCKET_ENDPOINT: "wss://gt2ls5ue6i.execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}"
+
+  # Permisos IAM para Lambda
+  iam:
+    role:
+      statements:
+        - Effect: "Allow"
+          Action:
+            - "logs:CreateLogGroup"
+            - "logs:CreateLogStream"
+            - "logs:PutLogEvents"
+          Resource: "arn:aws:logs:*:*:*"
+        - Effect: "Allow"
+          Action:
+            - "execute-api:ManageConnections"
+          Resource: "arn:aws:execute-api:*:*:*/@connections/*"
+        - Effect: "Allow"
+          Action:
+            - "dynamodb:PutItem"
+            - "dynamodb:GetItem"
+            - "dynamodb:DeleteItem"
+          Resource:
+            - "arn:aws:dynamodb:${self:provider.region}:*:table/${self:service}-${self:provider.stage}-WebSocketConnections"
+
+plugins:
+  - serverless-plugin-typescript  # Soporte para TypeScript
+  - serverless-offline            # Permite ejecutar la API localmente en desarrollo
+
+functions:
+  # Función para registrar usuario
+  registerUser:
+    handler: dist/controllers/controller.registerUser
+    events:
+      - httpApi:
+          path: /register
+          method: post
+  
+  # Función para obtener usuarios registrados
+  getAllUsers:
+    handler: dist/controllers/controller.getAllUsers
+    events:
+      - httpApi:
+          path: /get-all-users
+          method: get
+  
+  # Función para obtener usuario registrado a partir del id
+  getUserById:
+    handler: dist/controllers/controller.getUserById
+    events:
+      - httpApi:
+          path: /get-user/{id}
+          method: get
+  
+  # Función para obtener usuario registrado a partir del id
+  deleteUserById:
+    handler: dist/controllers/controller.deleteUserById
+    events:
+      - httpApi:
+          path: /delete-user/{id}
+          method: delete
+  
+  # Función para obtener usuario registrado a partir del id
+  updateUserById:
+    handler: dist/controllers/controller.updateUserById
+    events:
+      - httpApi:
+          path: /update-user/{id}
+          method: put
+  
+  # Función para obtener usuario registrado a partir del id
+  loginUser:
+    handler: dist/controllers/controller.loginUser
+    events:
+      - httpApi:
+          path: /login
+          method: post
+  
+  # Función para obtener usuario registrado a partir del id
+  logoutUser:
+    handler: dist/controllers/controller.logoutUser
+    events:
+      - httpApi:
+          path: /logout
+          method: post
+  
+  # Función para obtener usuario registrado a partir del id
+  refreshToken:
+    handler: dist/controllers/controller.refreshToken
+    events:
+      - httpApi:
+          path: /refresh-token
+          method: post
+
+  #### Lambda - WebSocket #####
+
+  # Lambda para manejar la conexión WebSocket
+  connect:
+    handler: dist/websocket/connectHandler.connectHandler
+    events:
+      - websocket:
+          route: $connect
+
+resources:
+  Resources:
+    ApiGatewayLoggingRoleAuthBackend:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: api-gateway-logging-role-auth-backend
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: "Allow"
+              Principal:
+                Service: "apigateway.amazonaws.com"
+              Action: "sts:AssumeRole"
+
+    WebSocketConnectionsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:service}-${self:provider.stage}-WebSocketConnections
+        AttributeDefinitions:
+          - AttributeName: "connectionId"
+            AttributeType: "S"
+        KeySchema:
+          - AttributeName: "connectionId"
+            KeyType: "HASH"
+        BillingMode: PAY_PER_REQUEST
+
+  Outputs:
+    ApiUrl:
+      Description: "URL base de la API desplegada"
+      Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
