@@ -1,4 +1,4 @@
-import { APIGatewayEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { APIGatewayEvent, APIGatewayProxyResult, ScheduledEvent } from 'aws-lambda';
 import { ApiGatewayManagementApi } from 'aws-sdk';
 import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
@@ -13,14 +13,16 @@ const Connection = mongoose.model('Connection', ConnectionSchema);
 
 // Crear cliente de API Gateway para enviar mensajes a través de WebSocket
 const apiGateway = new ApiGatewayManagementApi({
-    endpoint: "https://gt2ls5ue6i.execute-api.us-east-1.amazonaws.com/dev", // Cambiar a https
-  });  
+  endpoint: process.env.WEBSOCKET_ENDPOINT || "https://gt2ls5ue6i.execute-api.us-east-1.amazonaws.com/dev",
+});
 
 /**
  * Handler para enviar tokens de acceso a todos los usuarios conectados.
- * Este handler se activa con el evento WebSocket `refresh`.
+ * Este handler se activa con el evento WebSocket `refresh` o mediante un cron job programado.
  */
-export const refreshHandler = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
+export const refreshHandler = async (
+  event: APIGatewayEvent | ScheduledEvent
+): Promise<APIGatewayProxyResult> => {
   try {
     // Conectar a MongoDB
     await connectDB();

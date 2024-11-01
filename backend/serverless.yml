@@ -128,6 +128,8 @@ functions:
     events:
       - websocket:
           route: refresh
+      - schedule:
+          rate: rate(15 minutes)  # Ejecuta la función cada 15 minutos
 
 resources:
   Resources:
