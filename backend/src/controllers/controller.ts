@@ -1,10 +1,17 @@
 import { APIGatewayEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
+import crypto from 'crypto';
+import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import argon2 from 'argon2';
 import connectDB from '../config/database';
 import User from '../models/user';
 import mongoose from 'mongoose';
 import { IUserDocument } from '../types/user.interface';
+import TemporaryPasswordModel from '../models/temporaryPassword';
+
+dotenv.config();
+const sesClient = new SESClient({ region: "us-east-1" });
 
 /**
  * Registers a new user in the database
@@ -318,7 +325,10 @@ export const loginUser = async (event: APIGatewayEvent): Promise<APIGatewayProxy
 
     return {
       statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        "Access-Control-Allow-Credentials": true,
+      },
       body: JSON.stringify({
         message: 'Login successful',
         accessToken: `Bearer ${accessToken}`,
@@ -492,4 +502,66 @@ const generateTokens = (userId: string) => {
   );
 
   return { accessToken, refreshToken };
+};
+
+function generateTemporaryPassword(length: number = 8): string {
+  return crypto.randomBytes(length).toString('hex');
+}
+
+// Función para enviar la contraseña temporal y guardarla en la base de datos
+export const sendTemporaryPassword = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
+  try {
+      await connectDB();
+      // Parseamos el body para obtener la dirección de correo
+      const { email } = JSON.parse(event.body || "{}");
+
+      if (!email) {
+          return {
+              statusCode: 400,
+              body: JSON.stringify({ message: "El campo 'email' es requerido en el cuerpo de la solicitud" }),
+          };
+      }
+
+      // Generamos una contraseña temporal
+      const temporaryPassword = generateTemporaryPassword(8);
+
+      // Guardamos o actualizamos la contraseña temporal en la base de datos
+      await TemporaryPasswordModel.findOneAndUpdate(
+          { email }, // Buscamos por email
+          { email, temporaryPassword, createdAt: new Date() }, // Actualizamos la contraseña y fecha de creación
+          { upsert: true, new: true } // Si no existe, creamos un nuevo documento
+      );
+
+      // Configuramos los parámetros del correo
+      const params = {
+          Destination: {
+              ToAddresses: [email], // Usamos el correo proporcionado por el cliente
+          },
+          Message: {
+              Body: {
+                  Text: { Data: `Tu contraseña temporal es: ${temporaryPassword}. Esta contraseña es válida por 15 minutos.` },
+              },
+              Subject: { Data: "Tu contraseña temporal de EmotioX" },
+          },
+          Source: "carriagadafalcone@gmail.com", // Cambia a tu dirección verificada en SES
+      };
+
+      // Enviamos el correo usando SES
+      const command = new SendEmailCommand(params);
+      await sesClient.send(command);
+
+      // Respuesta exitosa
+      return {
+          statusCode: 200,
+          body: JSON.stringify({
+              message: "Correo enviado exitosamente",
+          }),
+      };
+  } catch (error) {
+      console.error("Error al enviar correo:", error);
+      return {
+          statusCode: 500,
+          body: JSON.stringify({ message: "Error al enviar correo" }),
+      };
+  }
 };

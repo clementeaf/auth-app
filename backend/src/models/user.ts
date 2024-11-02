@@ -36,6 +36,9 @@ const UserSchema: Schema<IUserDocument> = new Schema<IUserDocument>({
   resetPasswordExpires: { type: Date, default: null },
   refreshToken: { type: String, default: null },
   refreshTokenExpires: { type: Date, default: null },
+  // Nuevo campo para la contraseña temporal y su expiración
+  temporaryPassword: { type: String, default: null },
+  temporaryPasswordExpires: { type: Date, default: null },
 });
 
 /**

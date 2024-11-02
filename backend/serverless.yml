@@ -5,9 +5,21 @@ frameworkVersion: '3'
 provider:
   name: aws
   runtime: nodejs18.x
-  stage: ${opt:stage, 'dev'}  # Permite definir la etapa en tiempo de despliegue
+  stage: ${opt:stage, 'dev'}
   region: us-east-1
   profile: default
+
+  httpApi:
+    cors:
+      allowedOrigins:
+        - "http://localhost:5173"  # Cambia "*" por el origen específico
+      allowedMethods:
+        - GET
+        - POST
+        - DELETE
+        - PUT
+        - OPTIONS
+      allowCredentials: true  # Esto debe estar activado para cookies/autenticación
 
   environment:
     JWT_SECRET: ${env:JWT_SECRET, 'default_secret'}
@@ -15,7 +27,6 @@ provider:
     CONNECTIONS_TABLE: "${self:service}-${self:provider.stage}-WebSocketConnections"
     WEBSOCKET_ENDPOINT: "https://gt2ls5ue6i.execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}"
 
-  # Permisos IAM para Lambda
   iam:
     role:
       statements:
@@ -36,13 +47,18 @@ provider:
             - "dynamodb:DeleteItem"
           Resource:
             - "arn:aws:dynamodb:${self:provider.region}:*:table/${self:service}-${self:provider.stage}-WebSocketConnections"
+        - Effect: "Allow" # Permisos para SES
+          Action:
+            - "ses:SendEmail"
+            - "ses:SendRawEmail"
+          Resource: "*" # O limita este recurso si es necesario
+
 
 plugins:
-  - serverless-plugin-typescript  # Soporte para TypeScript
-  - serverless-offline            # Permite ejecutar la API localmente en desarrollo
+  - serverless-plugin-typescript
+  - serverless-offline
 
 functions:
-  # Función para registrar usuario
   registerUser:
     handler: dist/controllers/controller.registerUser
     events:
@@ -50,7 +66,6 @@ functions:
           path: /register
           method: post
   
-  # Función para obtener usuarios registrados
   getAllUsers:
     handler: dist/controllers/controller.getAllUsers
     events:
@@ -58,7 +73,6 @@ functions:
           path: /get-all-users
           method: get
   
-  # Función para obtener usuario registrado a partir del id
   getUserById:
     handler: dist/controllers/controller.getUserById
     events:
@@ -66,7 +80,6 @@ functions:
           path: /get-user/{id}
           method: get
   
-  # Función para obtener usuario registrado a partir del id
   deleteUserById:
     handler: dist/controllers/controller.deleteUserById
     events:
@@ -74,7 +87,6 @@ functions:
           path: /delete-user/{id}
           method: delete
   
-  # Función para obtener usuario registrado a partir del id
   updateUserById:
     handler: dist/controllers/controller.updateUserById
     events:
@@ -82,7 +94,6 @@ functions:
           path: /update-user/{id}
           method: put
   
-  # Función para obtener usuario registrado a partir del id
   loginUser:
     handler: dist/controllers/controller.loginUser
     events:
@@ -90,7 +101,6 @@ functions:
           path: /login
           method: post
   
-  # Función para obtener usuario registrado a partir del id
   logoutUser:
     handler: dist/controllers/controller.logoutUser
     events:
@@ -98,7 +108,6 @@ functions:
           path: /logout
           method: post
   
-  # Función para obtener usuario registrado a partir del id
   refreshToken:
     handler: dist/controllers/controller.refreshToken
     events:
@@ -106,30 +115,32 @@ functions:
           path: /refresh-token
           method: post
 
-  #### Lambda - WebSocket #####
-
-  # Lambda para manejar la conexión WebSocket
   connect:
     handler: dist/websocket/connectHandler.connectHandler
     events:
       - websocket:
           route: $connect
   
-  # Lambda para manejar la desconexión WebSocket
   disconnect:
     handler: dist/websocket/disconnectHandler.disconnectHandler
     events:
       - websocket:
           route: $disconnect
 
-  # Lambda para manejar el envío de tokens
   refresh:
     handler: src/websocket/refreshHandler.refreshHandler
     events:
       - websocket:
           route: refresh
       - schedule:
-          rate: rate(15 minutes)  # Ejecuta la función cada 15 minutos
+          rate: rate(15 minutes)
+
+  sendTemporaryPassword:
+    handler: dist/controllers/controller.sendTemporaryPassword
+    events:
+      - httpApi:
+          path: /send-temporary-password
+          method: post
 
 resources:
   Resources:

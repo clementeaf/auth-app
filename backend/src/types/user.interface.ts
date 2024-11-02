@@ -19,6 +19,8 @@ export interface IUser {
   resetPasswordExpires: Date | null;  // Expiry date of the reset password token (or null if not set)
   refreshToken: string | null;        // Token for refreshing access (or null if not set)
   refreshTokenExpires: Date | null;   // Expiry date of the refresh token (or null if not set)
+  temporaryPassword: string | null;   // Temporal password for account recovery
+  temporaryPasswordExpires: Date | null;  // Expiry date for the temporary password
 }
 
 /**
